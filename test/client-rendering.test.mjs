@@ -44,7 +44,13 @@ test('native Markdown receives current labels/streaming and assistant images use
   let View;
   const slots = {
     inject(_name, register) { cleanups.push(register()); },
-    register(meta, component) { if (meta.key === 'assistant-step') View = component; return () => {}; },
+    register(meta, component) {
+      if (meta.key === 'assistant-step') {
+        assert.equal(meta.locale, 'chat', 'The slot must bind the host chat translations');
+        View = component;
+      }
+      return () => {};
+    },
   };
   plugin.apply({
     get: name => name === 'slots' ? slots : undefined,
@@ -52,10 +58,10 @@ test('native Markdown receives current labels/streaming and assistant images use
     interval() { return () => {}; },
   });
   const attachments = [{ id: 'red' }, { id: 'blue' }];
-  const blocks = [{ kind: 'text', text: 'A completed paragraph.\n\n' }, ...attachments.map(attachment => ({ kind: 'image', attachment }))];
+  const blocks = [{ kind: 'reasoning', text: 'A complete local thought.' }, { kind: 'text', text: 'A completed paragraph.\n\n' }, ...attachments.map(attachment => ({ kind: 'image', attachment }))];
   const tLabel = key => ({ copy: '复制', copied: '已复制', 'markdown.footnotes': '脚注' })[key] ?? key;
-  const render = status => root.render(React.createElement(View, {
-    node: { data: { status, blocks } }, t: tLabel,
+  const render = (status, turnProcess) => root.render(React.createElement(View, {
+    node: { data: { status, blocks, step: 1 } }, t: tLabel, turnProcess,
     renderMessageImages(props) { gallery.push(props); return React.createElement('div', { 'data-gallery': true }, 'Images'); },
   }));
   await React.act(() => render('settled'));
@@ -73,5 +79,10 @@ test('native Markdown receives current labels/streaming and assistant images use
   assert.equal(markdown.at(-1).labels, stableLabels, 'Stable locale must preserve the native streaming parser cache');
   await React.act(() => render('settled'));
   assert.equal(markdown.at(-1).streaming, false);
+  const process = { foldable: true, spec: { answerStep: 1, inlineReasoning: true }, open: false };
+  await React.act(() => render('settled', process));
+  assert.equal(dom.window.document.querySelector('.dss-dr-row'), null, 'Respect the host process fold');
+  await React.act(() => render('settled', { ...process, open: true }));
+  assert.ok(dom.window.document.querySelector('.dss-dr-row'), 'Opening the host process reveals reasoning');
   assert.equal(warnings.length, 0);
 });

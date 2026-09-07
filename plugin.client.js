@@ -742,7 +742,7 @@ return {
         'data-settling': settling ? '' : undefined,
         'data-open': expanded || undefined
       },
-        props.running ? React.createElement('span', { className: 'dss-nr-hidden' }, 'Running') : null,
+        props.running ? React.createElement('span', { className: 'dss-nr-hidden' }, props.runningLabel || 'Running') : null,
         React.createElement('div', {
           className: 'dss-dr-row dss-nr-row',
           'data-disclosure-row': true,
@@ -756,7 +756,7 @@ return {
           }
         },
           React.createElement('span', { className: 'dss-dr-leading' }, leading),
-          React.createElement('span', { className: 'dss-dr-title' }, 'Think'),
+          React.createElement('span', { className: 'dss-dr-title' }, props.title || 'Think'),
           expanded ? null : summaryNode
         ),
         expanded ? body : null
@@ -791,6 +791,9 @@ return {
       const blocks = Array.isArray(data.blocks) ? data.blocks : [];
       const status = data.status === 'running' ? 'running' : (data.status === 'interrupted' ? 'interrupted' : 'settled');
       const streaming = status === 'running';
+      const process = props.turnProcess;
+      const reasoningHidden = process && process.foldable && process.spec.answerStep === data.step
+        && process.spec.inlineReasoning && !process.open;
       const settings = useSettings();
       const t = typeof props.t === 'function' ? props.t : function (k) { return k; };
 
@@ -925,6 +928,7 @@ return {
             fileMentions: mentions
           }));
         } else if (b.kind === 'reasoning' && typeof b.text === 'string') {
+          if (reasoningHidden) continue;
           const bodyShown = Math.min(stateRef.current.shown[i] || 0, b.text.length);
           const sumShown = Math.min(stateRef.current.sum[i] || 0, b.text.length);
           const batchId = stateRef.current.batch[i] || 0;
@@ -933,6 +937,8 @@ return {
           const prevShown = Math.min(stateRef.current.prev[i] || 0, bodyShown);
           rendered.push(React.createElement(ReasoningView, {
             key: 'r' + i,
+            title: t('message.think'),
+            runningLabel: t('row.running'),
             summaryText: b.text.slice(0, sumShown),
             bodyStable: b.text.slice(0, prevShown),
             bodyFresh: bodyShown > prevShown ? b.text.slice(prevShown, bodyShown) : '',
@@ -1189,7 +1195,7 @@ return {
         if (on && current === null) {
           try {
             current = slots.register(
-              { name: 'conversation.chat.node', key: 'assistant-step', priority: -1 },
+              { name: 'conversation.chat.node', key: 'assistant-step', priority: -1, locale: 'chat' },
               GuardedAssistantNode
             );
           } catch (e) {
