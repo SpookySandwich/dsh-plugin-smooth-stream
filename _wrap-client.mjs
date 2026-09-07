@@ -29,4 +29,4 @@ const out = [
   "",
 ].join('\n');
 fs.writeFileSync(new URL('./lib/client.js', import.meta.url), out);
-console.log('wrote lib/client.js', out.length);
+console.error('wrote lib/client.js', out.length);

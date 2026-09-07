@@ -11,7 +11,6 @@ const STAGGER_MAX = 4;
 // How long the closing underline takes to retract once a turn stops running.
 const SETTLE_MS = 560;
 const SPEC_PRIMITIVES = '@deepseek-ai/dsh-client-ui-primitives';
-const SPEC_ATTACHMENT = '@deepseek-ai/dsh-client-ui-attachment';
 
 /* ------------------------------------------------------------- settings -- */
 
@@ -581,10 +580,10 @@ function IconChevron14(className) {
 }
 
 return {
-  inject: ['timer'],
+  inject: ['timer', 'slots', 'locale', 'modules'],
   apply(ctx) {
     const slots = ctx.get('slots');
-    if (slots === undefined) return;
+    if (slots === undefined) throw new Error('[dsh-plugin-smooth-stream] Missing DSH slots service; check client dependencies.');
     ctx.effect(function () { return styles.insert(CSS); });
 
     const I18N_NS = 'dsh-plugin-smooth-stream';
@@ -632,12 +631,13 @@ return {
     } catch (e) {}
 
     const nr = thinkClasses();
-    let prims = resolveModule(SPEC_PRIMITIVES, 'MarkdownText');
-    let attach = resolveModule(SPEC_ATTACHMENT, 'ImageGallery');
+    let prims;
+    // Prefer the module loader's public require over internal export caches.
+    try { prims = pickNamed(require(SPEC_PRIMITIVES), 'MarkdownText'); } catch (e) {}
+    if (!prims) prims = resolveModule(SPEC_PRIMITIVES, 'MarkdownText');
     try {
       const svc = ctx.get('modules');
       if (!prims) prims = fromSystem(svc, SPEC_PRIMITIVES, 'MarkdownText');
-      if (!attach) attach = fromSystem(svc, SPEC_ATTACHMENT, 'ImageGallery');
     } catch (e) {}
 
     function MarkdownView(props) {
@@ -664,7 +664,8 @@ return {
       const node = (prims && isComponent(prims.MarkdownText))
         ? React.createElement(prims.MarkdownText, {
           text: props.text,
-          streaming: false,
+          streaming: props.streaming === true,
+          labels: props.labels,
           codeLabels: props.codeLabels,
           fileMentions: props.fileMentions
         })
@@ -793,11 +794,12 @@ return {
       const settings = useSettings();
       const t = typeof props.t === 'function' ? props.t : function (k) { return k; };
 
-      const labelsRef = React.useRef(null);
-      if (labelsRef.current === null) {
-        labelsRef.current = { copyLabel: t('copy') || 'Copy', copiedLabel: t('copied') || 'Copied' };
-      }
-      const codeLabels = labelsRef.current;
+      const copyLabel = t('copy') || 'Copy';
+      const copiedLabel = t('copied') || 'Copied';
+      const footnotesLabel = t('markdown.footnotes') || 'Footnotes';
+      const markdownLabels = React.useMemo(function () {
+        return { code: { copyLabel: copyLabel, copiedLabel: copiedLabel }, footnotes: footnotesLabel };
+      }, [copyLabel, copiedLabel, footnotesLabel]);
 
       const loc = node && node.location;
       const turn = loc && (loc.kind === 'turn' || loc.kind === 'step') ? loc.turn : undefined;
@@ -917,7 +919,9 @@ return {
             animate: liveReveal,
             fromEmpty: prevShown === 0,
             batchId: batchId,
-            codeLabels: codeLabels,
+            streaming: streaming,
+            labels: markdownLabels,
+            codeLabels: markdownLabels.code,
             fileMentions: mentions
           }));
         } else if (b.kind === 'reasoning' && typeof b.text === 'string') {
@@ -939,18 +943,18 @@ return {
             settleEligible: i === lastReasoningIdx
           }));
         } else if (b.kind === 'image') {
-          if (attach && isComponent(attach.ImageGallery)) {
+          if (typeof props.renderMessageImages === 'function') {
             const group = [b];
             while (i + 1 < blocks.length && blocks[i + 1] && blocks[i + 1].kind === 'image') {
               i += 1;
               group.push(blocks[i]);
             }
-            rendered.push(React.createElement(attach.ImageGallery, {
-              key: 'img' + i,
-              images: group,
-              load: props.loadImage || function () { return Promise.reject(new Error('no image loader')); },
-              align: 'start'
-            }));
+            rendered.push(React.createElement(React.Fragment, { key: 'img' + i },
+              props.renderMessageImages({
+                images: group.map(function (image) { return { attachment: image.attachment }; }),
+                align: 'start'
+              })
+            ));
           } else {
             rendered.push(React.createElement(ImageNode, {
               key: 'img' + i,
@@ -1189,6 +1193,7 @@ return {
               GuardedAssistantNode
             );
           } catch (e) {
+            console.warn('[dsh-plugin-smooth-stream] Unable to register assistant rendering.', e);
             current = null;
           }
         } else if (!on && current !== null) {
