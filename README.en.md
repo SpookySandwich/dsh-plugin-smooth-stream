@@ -3,8 +3,9 @@
 [简体中文](README.md) | English
 
 [![npm](https://img.shields.io/npm/v/dsh-plugin-smooth-stream)](https://www.npmjs.com/package/dsh-plugin-smooth-stream)
+[![CI](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.6-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.1.2--rc.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![deepseek1024](https://img.shields.io/badge/deepseek1024-listed-4b8dff)](https://deepseek1024.com/plugins/SpookySandwich/dsh-smooth-stream)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-smooth-stream?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/stargazers)
 
@@ -59,7 +60,10 @@ Eight entrances, each tuned to its own rhythm; all recorded over the same reply 
 
 ## Compatibility
 
-- Verified on dsh `0.1.0-rc.6`.
+This release targets DSH `0.1.2-rc.1`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
+
+
+- Updated for dsh `0.1.2-rc.1` client services, Markdown and image APIs; automated tests cover loading and component rendering.
 - This plugin owns the conversation view's assistant rendering (the `assistant-step` cell of `conversation.chat.node`) and is mutually exclusive with other plugins that take over the same rendering — with both installed, only one wins.
 - Respects `prefers-reduced-motion`: with reduced motion enabled, all animation and smooth scrolling switch off.
 - A rendering failure degrades to plain text for that message instead of breaking the conversation.
