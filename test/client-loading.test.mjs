@@ -15,7 +15,7 @@ const expectedSlots = {
   'dsh-plugin-rollout-scout': ['sidebar.footer.action', 'shell.overlay'],
 };
 const requiredModules = {
-  slots: '@deepseek-ai/dsh-client-ui-slots',
+  slots: '@deepseek-ai/dsh-client-ui-renderer',
   sessions: '@deepseek-ai/dsh-api-session-controller',
   workspaces: '@deepseek-ai/dsh-api-workspace-controller',
   locale: '@deepseek-ai/dsh-client-locale',

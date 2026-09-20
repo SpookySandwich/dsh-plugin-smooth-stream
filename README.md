@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-smooth-stream)](https://www.npmjs.com/package/dsh-plugin-smooth-stream)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.2--rc.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.1.5--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![deepseek1024](https://img.shields.io/badge/deepseek1024-%E5%B7%B2%E6%94%B6%E5%BD%95-4b8dff)](https://deepseek1024.com/plugins/SpookySandwich/dsh-smooth-stream)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-smooth-stream?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/stargazers)
 
@@ -60,10 +60,16 @@ dsh plugin --profile web add dsh-plugin-smooth-stream
 
 ## 兼容性
 
-本次兼容目标为 DSH `0.1.2-rc.1`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
+版本 `1.2.0`：更新客户端渲染服务依赖与已验证的 DSH 版本范围；现有渲染行为通过新版宿主验证。
+
+声明兼容范围为 `>=0.1.5-rc.2 <0.1.6-0`；已验证官方 `0.1.5-rc.2`，不声明兼容 `0.1.6` alpha。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.1.5.md)。
+
+可从 [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/releases/tag/v1.2.0) 下载发布包，然后执行 `dsh plugin --profile desktop add ./dsh-plugin-smooth-stream-1.2.0.tgz`。
+
+本次兼容目标为 DSH `0.1.5-rc.2`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
 
 
-- 已适配 dsh `0.1.2-rc.1` 的客户端服务、Markdown 和图片接口；自动化测试覆盖加载与组件渲染。
+- 已适配 dsh `0.1.5-rc.2` 的客户端服务、Markdown 和图片接口；自动化测试覆盖加载与组件渲染。
 - 本插件接管对话视图的 assistant 消息渲染（`conversation.chat.node` 的 `assistant-step` 槽位），与其他同样接管该渲染的插件互斥——同装时只有一个生效。
 - 遵循 `prefers-reduced-motion`：系统开启减少动态效果时，所有动画与平滑滚动自动关闭。
 - 渲染出错时自动降级为纯文本显示，不影响会话其余部分。
