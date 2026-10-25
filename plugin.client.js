@@ -910,6 +910,10 @@ return {
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         if (!b) continue;
+        // DSH may mount the same node in separate reasoning and response seats.
+        // Keep the original block indexes for reveal state, but render only this seat.
+        if (props.groupPart === 'reasoning' && b.kind !== 'reasoning') continue;
+        if (props.groupPart === 'response' && b.kind === 'reasoning') continue;
         if (b.kind === 'tool-call') continue;
         if (b.kind === 'text' && typeof b.text === 'string') {
           const shown = Math.min(stateRef.current.shown[i] || 0, b.text.length);
@@ -981,7 +985,9 @@ return {
       },
         React.createElement('div', { className: 'dss-body' },
           rendered,
-          status === 'interrupted' ? React.createElement('span', { className: 'dss-stopped' }, t('message.stopped') || 'Stopped') : null
+          status === 'interrupted' && (props.groupPart === undefined || props.groupPart === 'response'
+            || !blocks.some(function (b) { return b && b.kind !== 'reasoning' && b.kind !== 'tool-call'; }))
+            ? React.createElement('span', { className: 'dss-stopped' }, t('message.stopped') || 'Stopped') : null
         )
       );
     }
@@ -997,7 +1003,9 @@ return {
         const blocks = (props.node && props.node.data && props.node.data.blocks) || [];
         for (let i = 0; i < blocks.length; i++) {
           const b = blocks[i];
-          if (b && b.kind === 'text' && typeof b.text === 'string') out += (out ? '\n\n' : '') + b.text;
+          if (!b || typeof b.text !== 'string') continue;
+          if (props.groupPart === 'reasoning' ? b.kind !== 'reasoning' : b.kind !== 'text') continue;
+          out += (out ? '\n\n' : '') + b.text;
         }
       } catch (e) {}
       return React.createElement('div', { className: 'dss-root' },
@@ -1016,7 +1024,7 @@ return {
     Boundary.prototype.constructor = Boundary;
     Boundary.getDerivedStateFromError = function () { return { failed: true }; };
     Boundary.prototype.render = function () {
-      if (this.state.failed) return React.createElement(PlainFallback, { node: this.props.ownerProps.node });
+      if (this.state.failed) return React.createElement(PlainFallback, this.props.ownerProps);
       return React.createElement(SmoothAssistantNode, this.props.ownerProps);
     };
 
