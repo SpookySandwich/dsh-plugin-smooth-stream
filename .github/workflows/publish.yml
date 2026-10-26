@@ -20,7 +20,10 @@ concurrency:
 
 jobs:
   publish:
-    if: github.repository == 'SpookySandwich/dsh-plugin-smooth-stream'
+    if: >-
+      github.repository == 'SpookySandwich/dsh-plugin-smooth-stream' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
