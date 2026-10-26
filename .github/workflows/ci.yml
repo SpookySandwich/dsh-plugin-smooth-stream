@@ -35,6 +35,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: node --test scripts/npm-publish.test.mjs
       - run: npm run check:package
       - name: Ensure checks did not modify tracked files
         run: git diff --exit-code
