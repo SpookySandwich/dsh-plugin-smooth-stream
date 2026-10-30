@@ -128,6 +128,25 @@ function firstLine(text) {
   const n = text.indexOf('\n');
   return n === -1 ? text : text.slice(0, n);
 }
+// Match official DSH's reasoning display preparation. The chat node still
+// carries raw model text even though the host's own ReasoningRow strips it.
+function reasoningText(text) {
+  if (text[0] !== '<') return text;
+  const opening = '<signature>';
+  if (opening.indexOf(text) === 0) return '';
+  if (text.indexOf(opening) !== 0) return text;
+  const end = text.indexOf('</signature>', opening.length);
+  if (end === -1) return '';
+  let start = end + '</signature>'.length;
+  while (start < text.length) {
+    if (text[start] === '\n') start++;
+    else if (text[start] === '\r' && text[start + 1] === '\n') start += 2;
+    else break;
+  }
+  const display = text.slice(start);
+  // The official row hides a prepared value with no displayable content.
+  return display.trim() === '' ? '' : display;
+}
 function latestLine(text) {
   const t = (text || '').trimEnd();
   const n = t.lastIndexOf('\n');
@@ -444,7 +463,8 @@ const CSS = [
   '.dss-set-btn{padding:5px 14px;border-radius:8px;border:1px solid var(--dsw-alias-border-secondary,rgba(128,128,128,.3));background:transparent;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);cursor:pointer}',
   '.dss-set-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}',
 
-  '@media (prefers-reduced-motion:reduce){.dss-smooth-follow,.dss-set-preview[data-follow]{scroll-behavior:auto}.dss-fresh,.dss-sum-fade{animation:none;filter:none;transform:none;animation-delay:0s!important;-webkit-mask-image:none!important;mask-image:none!important;clip-path:none!important;text-shadow:none!important}.dss-fresh:after{animation:none;opacity:0}.dss-nr-root[data-state=running] .dss-nr-row:after{animation:none}.dss-nr-root[data-settling] .dss-nr-row:after{animation:none;opacity:0}}'
+  // Match the per-style selector specificity so reduced motion wins for every variant.
+  '@media (prefers-reduced-motion:reduce){[data-conversation-scroll].dss-smooth-follow,.dss-set-preview[data-follow]{scroll-behavior:auto}.dss-root[data-reveal] .dss-fresh,.dss-fresh,.dss-sum-fade{animation:none;filter:none;transform:none;animation-delay:0s!important;-webkit-mask-image:none!important;mask-image:none!important;clip-path:none!important;text-shadow:none!important}.dss-root[data-reveal] .dss-fresh:after,.dss-fresh:after{animation:none;opacity:0}.dss-nr-root[data-state=running] .dss-nr-row:after{animation:none}.dss-nr-root[data-settling] .dss-nr-row:after{animation:none;opacity:0}}'
 ].join('');
 
 /* -------------------------------------------------------- scroll follow -- */
@@ -788,7 +808,12 @@ return {
     function SmoothAssistantNode(props) {
       const node = props.node;
       const data = (node && node.data) || {};
-      const blocks = Array.isArray(data.blocks) ? data.blocks : [];
+      // Prepare before measuring, polling or slicing so all reveal offsets use
+      // display text. Preserve indexes and the host's original blocks.
+      const blocks = (Array.isArray(data.blocks) ? data.blocks : []).map(function (b) {
+        return b && b.kind === 'reasoning' && typeof b.text === 'string'
+          ? Object.assign({}, b, { text: reasoningText(b.text) }) : b;
+      });
       const status = data.status === 'running' ? 'running' : (data.status === 'interrupted' ? 'interrupted' : 'settled');
       const streaming = status === 'running';
       const process = props.turnProcess;
@@ -1005,7 +1030,8 @@ return {
           const b = blocks[i];
           if (!b || typeof b.text !== 'string') continue;
           if (props.groupPart === 'reasoning' ? b.kind !== 'reasoning' : b.kind !== 'text') continue;
-          out += (out ? '\n\n' : '') + b.text;
+          const text = b.kind === 'reasoning' ? reasoningText(b.text) : b.text;
+          if (text) out += (out ? '\n\n' : '') + text;
         }
       } catch (e) {}
       return React.createElement('div', { className: 'dss-root' },

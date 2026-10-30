@@ -52,7 +52,7 @@ for (const failMarkdown of [false, true]) {
       interval() { return () => {}; },
     });
     const attachments = [{ id: 'one' }, { id: 'two' }];
-    const blocks = [{ kind: 'reasoning', text: 'Unique reasoning.' },
+    const blocks = [{ kind: 'reasoning', text: '<signature>metadata.payload</signature>\n\nUnique reasoning.' },
       { kind: 'text', text: 'Unique answer.\n\n' },
       ...attachments.map(attachment => ({ kind: 'image', attachment })),
       { kind: 'other', block: { value: 42 } }];
@@ -76,6 +76,7 @@ for (const failMarkdown of [false, true]) {
     assert.equal(response.textContent.includes('Unique reasoning.'), false, 'Response seat must not duplicate reasoning');
     assert.equal(dom.window.document.body.textContent.split('Unique answer.').length - 1, 1);
     assert.equal(dom.window.document.body.textContent.split('Unique reasoning.').length - 1, 1);
+    assert.equal(dom.window.document.body.textContent.includes('metadata.payload'), false, 'Fallback and normal rendering both prepare reasoning');
     if (failMarkdown) {
       assert.ok(errors.length > 0, 'Exercise the error boundary');
       return;

@@ -16,11 +16,25 @@ class LocalReply extends LlmAdapter {
   }
   async listModels(provider) { return [await this.resolveModel(provider, 'qa-model')]; }
   async *stream() {
+    const signatures = process.env.DSH_QA_SIGNATURES === '1';
+    if (signatures) {
+      // Exercise a prefix, an unfinished envelope, CRLF/LF trimming, and a
+      // metadata-only second block through the actual official stream pipeline.
+      for (const text of ['<sign', 'ature>metadata.payload', '</signature>\r\n\n']) {
+        yield { type: 'reasoning-delta', index: 0, text };
+        await delay(350);
+      }
+    }
     yield { type: 'reasoning-delta', index: 0, text: 'SMOOTH_QA_THOUGHT: one local reasoning block.\n' };
     await delay(1200);
-    yield { type: 'text-delta', index: 1, text: '# SMOOTH_QA_ANSWER\n\n' + 'Paragraph batching works with the official renderer. '.repeat(12) + '\n\n' };
+    if (signatures) {
+      yield { type: 'reasoning-delta', index: 1, text: '<signature>metadata.only</signature>\n\n' };
+      await delay(350);
+    }
+    const answerIndex = signatures ? 2 : 1;
+    yield { type: 'text-delta', index: answerIndex, text: '# SMOOTH_QA_ANSWER\n\n' + 'Paragraph batching works with the official renderer. '.repeat(12) + '\n\n' };
     await delay(600);
-    yield { type: 'text-delta', index: 1, text: '```js\nconst answer = 42;\n```\n\n| Item | Value |\n| --- | --- |\n| QA | 42 |\n\nSMOOTH_QA_DONE' };
+    yield { type: 'text-delta', index: answerIndex, text: '```js\nconst answer = 42;\n```\n\n| Item | Value |\n| --- | --- |\n| QA | 42 |\n\nSMOOTH_QA_DONE' };
     await delay(400);
     yield { type: 'finish', reason: { kind: 'stop' } };
   }
