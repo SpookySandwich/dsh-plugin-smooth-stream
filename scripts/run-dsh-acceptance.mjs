@@ -6,8 +6,10 @@ import { mkdtemp, mkdir, symlink, writeFile, copyFile, rm, readFile } from 'node
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
+import { checkInteractions } from './check-dsh-interactions.mjs';
 
 const root = resolve(import.meta.dirname, '..');
+const pluginRoot = process.env.DSH_QA_PLUGIN ? resolve(process.env.DSH_QA_PLUGIN) : root;
 assert.ok(process.env.DSH_QA_MODULES, 'Set DSH_QA_MODULES to an official DSH node_modules directory');
 const modules = resolve(process.env.DSH_QA_MODULES);
 const version = JSON.parse(await readFile(join(modules, '@deepseek-ai/dsh/package.json'))).version;
@@ -25,7 +27,7 @@ async function stop() {
 try {
   await mkdir(join(profile, 'node_modules'), { recursive: true });
   await symlink(join(modules, '@deepseek-ai'), join(profile, 'node_modules', '@deepseek-ai'), 'junction');
-  await symlink(root, join(profile, 'node_modules', 'dsh-plugin-smooth-stream'), 'junction');
+  await symlink(pluginRoot, join(profile, 'node_modules', 'dsh-plugin-smooth-stream'), 'junction');
   await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'smooth-stream-qa', private: true,
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-plugin-smooth-stream'] } } }));
   await copyFile(join(root, 'test/fixtures/dsh-acceptance.mjs'), join(profile, 'fixture.mjs'));
@@ -62,7 +64,7 @@ try {
       if (phase === 'fresh') await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 60000 });
       await page.getByText('Smooth Stream acceptance', { exact: true }).first().click({ timeout: 60000 });
       await page.locator('[data-chat-group-part="response"] .dss-body').first().waitFor({ timeout: 30000 });
-      for (const button of await page.getByRole('button', { name: /^Completed/ }).all()) await button.click();
+      for (const button of await page.getByRole('button', { name: /^(Completed|已完成，用时)/ }).all()) await button.click();
       // Count the actual host's split seats, including folded process content.
       const initialCount = phase === 'fresh' ? 1 : 2;
       assert.equal(await page.locator('.dss-body').getByText('SMOOTH_QA_ANSWER', { exact: true }).count(), initialCount);
@@ -71,6 +73,18 @@ try {
       assert.equal(await page.locator('[data-chat-group-part="response"] .dss-dr-row').count(), 0);
       assert.equal(await page.locator('.dss-body pre').count(), initialCount);
       assert.equal(await page.locator('.dss-body table').count(), initialCount);
+      if (process.env.DSH_QA_IMAGES === '1') {
+        await page.waitForFunction(count => [...document.querySelectorAll('.dss-body .dss-image')].filter(img => img.complete && img.naturalWidth === 160).length === count, initialCount);
+        assert.equal(await page.locator('[data-chat-group-part="reasoning"] .dss-body img').count(), 0);
+        assert.equal(await page.locator('.dss-body .dss-image').first().evaluate(el => el.closest('button') !== null), false, 'Retain plain image fallback, without claiming native gallery');
+        console.log(`${version} ${phase}: durable assistant image loaded once in response seat (plain image fallback)`);
+      }
+      if (process.env.DSH_QA_FILES === '1') {
+        const file = page.locator('.dss-body').getByRole('button', { name: /smooth-qa\.txt/ }).first();
+        await file.waitFor();
+        assert.match(await file.getAttribute('title'), /smooth-qa\.txt$/);
+        console.log(`${version} ${phase}: official closing-turn file mention rendered as an actionable link`);
+      }
       console.log(`${version} ${phase}: official grouped history, Markdown code/table, single reasoning and answer passed`);
       const expandReasoning = async () => {
         // The host has a second disclosure inside each completed turn.
@@ -88,7 +102,32 @@ try {
         assert.doesNotMatch(await page.locator('body').textContent(), /metadata\.(payload|only)|<signature/);
       };
       if (signatures) await checkReasoning();
+      if (process.env.DSH_QA_INTERACTIONS === '1') {
+        await checkInteractions(page, process.env.DSH_QA_ARTIFACTS, `${version}-${phase}`);
+        await page.getByRole('button', { name: /^(Close|关闭)$/ }).click();
+        await page.reload();
+        await page.locator('.dss-body').getByText('SMOOTH_QA_ANSWER', { exact: true }).first().waitFor();
+        for (const button of await page.getByRole('button', { name: /^(Completed|已完成，用时)/ }).all()) {
+          if (await button.getAttribute('aria-expanded') === 'false') await button.click();
+        }
+        if (signatures) await checkReasoning();
+      }
       if (process.env.DSH_QA_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_QA_ARTIFACTS, `acceptance-${version}-${phase}.png`), fullPage: true });
+      if (process.env.DSH_QA_LAYOUT === '1' && phase === 'fresh') {
+        for (const viewport of [{ width: 1400, height: 1000 }, { width: 800, height: 900 }, { width: 390, height: 844 }]) {
+          await page.setViewportSize(viewport);
+          const answer = page.locator('[data-chat-group-part="response"] .dss-root').last();
+          await answer.waitFor({ state: 'visible' });
+          await answer.scrollIntoViewIfNeeded();
+          const layout = await answer.evaluate(el => {
+            const rect = el.getBoundingClientRect();
+            return { left: rect.left, right: rect.right, width: innerWidth, contentWidth: rect.width, overflow: el.scrollWidth - el.clientWidth };
+          });
+          assert.ok(layout.contentWidth > 0 && layout.left >= -1 && layout.right <= layout.width + 1 && layout.overflow <= 1, JSON.stringify(layout));
+          if (process.env.DSH_QA_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_QA_ARTIFACTS, `chat-${version}-${viewport.width}.png`), fullPage: true });
+        }
+        await page.setViewportSize({ width: 1400, height: 1000 });
+      }
       // Observe actual live chat, including short-lived prefix states and reveal
       // nodes. The settings preview is deliberately excluded from this sample.
       await page.evaluate(checkWholePage => {
@@ -112,7 +151,7 @@ try {
           }
         };
         window.__smoothQATimer = setInterval(sample, 25);
-      }, version === '0.2.1-rc.5');
+      }, !['0.2.0-rc.2', '0.2.1-rc.2'].includes(version));
       const response = page.request.get(`${origin}/qa/followup`);
       if (process.env.DSH_QA_SETTINGS) {
         const scrollport = page.locator('[data-conversation-scroll].dss-smooth-follow');
@@ -133,7 +172,7 @@ try {
         assert.doesNotMatch(await page.locator('body').textContent(), /metadata\.(payload|only)|<signature/);
         // Opening the host process exposes every block, including signature-only
         // blocks that must not create an extra Smooth Stream reasoning row.
-        for (const button of await page.getByRole('button', { name: /^Completed/ }).all()) {
+        for (const button of await page.getByRole('button', { name: /^(Completed|已完成，用时)/ }).all()) {
           if (await button.getAttribute('aria-expanded') === 'false') await button.click();
         }
         assert.equal(await page.locator('.dss-dr-row').count(), initialCount + 1);
@@ -161,10 +200,18 @@ try {
           await page.getByRole('button', { name, exact: true }).click();
           const piece = page.locator('.dss-set-preview .dss-set-piece').first();
           await piece.waitFor();
-          assert.equal(await piece.evaluate(el => getComputedStyle(el).animationName), 'none', `${name}: reduced motion`);
-          assert.equal(await piece.evaluate(el => getComputedStyle(el, '::after').animationName), 'none', `${name}: reduced motion overlay`);
+          // Preview batches remount on their timer. Sample a connected current
+          // node atomically, rather than querying styles on a detached old node.
+          await page.waitForFunction(() => {
+            const el = document.querySelector('.dss-set-preview .dss-set-piece');
+            return el?.isConnected && getComputedStyle(el).animationName === 'none'
+              && getComputedStyle(el, '::after').animationName === 'none';
+          });
           await page.emulateMedia({ reducedMotion: 'no-preference' });
-          assert.equal(await piece.evaluate(el => getComputedStyle(el).animationName), `dss-${name.toLowerCase()}`, `${name}: normal motion`);
+          await page.waitForFunction(expected => {
+            const el = document.querySelector('.dss-set-preview .dss-set-piece');
+            return el?.isConnected && getComputedStyle(el).animationName === expected;
+          }, `dss-${name.toLowerCase()}`);
           await page.emulateMedia({ reducedMotion: 'reduce' });
         }
         await page.getByRole('button', { name: 'Rise', exact: true }).click();
@@ -183,6 +230,52 @@ try {
         await page.locator('[data-chat-group-part="response"] .dss-body').getByText('SMOOTH_QA_ANSWER', { exact: true }).first().waitFor({ state: 'attached' });
         assert.deepEqual(errors, []);
         console.log(`${version}: all eight settings choices, preview, reduced motion, disable/reload persistence and re-enable passed`);
+        if (process.env.DSH_QA_LAYOUT === '1') {
+          const layouts = async locale => {
+            for (const viewport of [{ width: 1400, height: 1000 }, { width: 800, height: 900 }, { width: 390, height: 844 }]) {
+              await page.setViewportSize(viewport);
+              await page.locator('.dss-set').waitFor();
+              const layout = await page.locator('.dss-set').evaluate(el => {
+                const rect = el.getBoundingClientRect();
+                return { left: rect.left, right: rect.right, width: innerWidth, overflow: el.scrollWidth - el.clientWidth };
+              });
+              // Native range inputs can add their 2px border to a 100% width.
+              assert.ok(layout.left >= -1 && layout.right <= layout.width + 1 && layout.overflow <= 4, JSON.stringify(layout));
+              if (process.env.DSH_QA_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_QA_ARTIFACTS, `settings-${version}-${locale}-${viewport.width}.png`), fullPage: true });
+            }
+            await page.setViewportSize({ width: 1400, height: 1000 });
+          };
+          await layouts('en');
+          await page.getByText('General', { exact: true }).click();
+          await page.getByRole('button', { name: 'English', exact: true }).click();
+          await page.getByRole('menuitem', { name: /中文/ }).click();
+          await page.getByText('Smooth Stream', { exact: true }).click();
+          await page.getByRole('checkbox', { name: /启用 Smooth Stream/ }).waitFor();
+          assert.equal(await page.getByRole('button', { name: '上升', exact: true }).getAttribute('data-on'), 'true');
+          await layouts('zh');
+          console.log(`${version}: English/Chinese settings fit 1400, 800 and 390px viewports`);
+        }
+      }
+      if (process.env.DSH_QA_EDGE_CASES === '1' && phase === 'restart') {
+        for (const kind of ['interrupted', 'error']) {
+          const response = page.request.get(`${origin}/qa/${kind}`);
+          await page.locator('.dss-body').getByText(`SMOOTH_QA_${kind}_PARTIAL`, { exact: true }).waitFor();
+          assert.equal(await page.locator('.dss-body').getByText(`SMOOTH_QA_${kind}_PARTIAL`, { exact: true }).count(), 1);
+          assert.equal(await page.locator('[data-chat-group-part="reasoning"] .dss-body').getByText(`SMOOTH_QA_${kind}_PARTIAL`, { exact: true }).count(), 0);
+          assert.equal(await page.locator('[data-chat-group-part="response"] .dss-dr-row').count(), 0);
+          assert.equal((await response).status(), 200);
+        }
+        assert.ok(await page.locator('.dss-stopped').count() >= 1);
+        await page.getByText(/SMOOTH_QA_EXPECTED_FAILURE/).first().waitFor();
+        await page.reload();
+        await page.locator('.dss-body').getByText('SMOOTH_QA_interrupted_PARTIAL', { exact: true }).waitFor();
+        // The host retains cancelled partial messages, but discards an
+        // uncommitted failed attempt and renders its own failure card.
+        await page.getByText(/SMOOTH_QA_EXPECTED_FAILURE/).first().waitFor();
+        assert.equal(await page.locator('.dss-body').getByText('SMOOTH_QA_error_PARTIAL', { exact: true }).count(), 0);
+        if (process.env.DSH_QA_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_QA_ARTIFACTS, `edge-cases-${version}.png`), fullPage: true });
+        assert.deepEqual(errors, []);
+        console.log(`${version}: live interruption/error seat filtering passed; reload retains cancelled output and the host failure card`);
       }
     } catch (error) {
       if (process.env.DSH_QA_ARTIFACTS) {

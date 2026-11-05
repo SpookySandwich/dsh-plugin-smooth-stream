@@ -6,7 +6,7 @@ import { JSDOM } from 'jsdom';
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 
-test('native Markdown receives current labels/streaming and assistant images use the host gallery', async t => {
+test('native Markdown receives labels, streaming and file links; optional host image gallery is preserved', async t => {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="root"></div></body></html>', { url: 'https://qa.test/' });
   const savedWindow = globalThis.window;
   const savedDocument = globalThis.document;
@@ -25,6 +25,15 @@ test('native Markdown receives current labels/streaming and assistant images use
   });
   const markdown = [];
   const gallery = [];
+  const fileOwners = [];
+  const mentions = { resolve: () => undefined };
+  let fileServiceAvailable = true;
+  let sessionsAvailable = true;
+  let liveCwd = 'C:\\workspace\\initial';
+  const sessions = {
+    list: { getSnapshot: () => ({ byId: { 'qa-session': { cwd: 'C:\\workspace' } } }) },
+    binding: () => ({ session: { projections: { faceOf: () => ({ getSnapshot: () => liveCwd }) } } }),
+  };
   const warnings = [];
   const native = { MarkdownText: React.memo(props => {
     markdown.push(props);
@@ -41,19 +50,22 @@ test('native Markdown receives current labels/streaming and assistant images use
     console: { warn: (...args) => warnings.push(args), error: (...args) => warnings.push(args) },
     setTimeout, clearTimeout, setInterval, clearInterval,
   });
-  let View;
+  let View, injected;
   const slots = {
     inject(_name, register) { cleanups.push(register()); },
     register(meta, component) {
       if (meta.key === 'assistant-step') {
         assert.equal(meta.locale, 'chat', 'The slot must bind the host chat translations');
         View = component;
+        injected = meta.inject?.('qa-session');
       }
       return () => {};
     },
   };
   plugin.apply({
-    get: name => name === 'slots' ? slots : undefined,
+    get: name => name === 'slots' ? slots : name === 'chatFileMentions' && fileServiceAvailable ? {
+      forClosing(owner, sessionId, getFileTriggerProps) { fileOwners.push({ owner, sessionId, getFileTriggerProps }); return mentions; },
+    } : name === 'sessions' && sessionsAvailable ? sessions : undefined,
     effect(fn) { cleanups.push(fn()); },
     interval() { return () => {}; },
   });
@@ -85,4 +97,62 @@ test('native Markdown receives current labels/streaming and assistant images use
   await React.act(() => render('settled', { ...process, open: true }));
   assert.ok(dom.window.document.querySelector('.dss-dr-row'), 'Opening the host process reveals reasoning');
   assert.equal(warnings.length, 0);
+  // rc.1 no longer supplies fileMentions in ChatNodeOwnerProps. The replacement
+  // renderer must bind the host's session-scoped resolver itself.
+  const turn = { status: 'closed' };
+  const finalNode = { seq: 42 };
+  const openFile = () => {};
+  const renderClosing = (tailSeq, ownerResolver) => root.render(React.createElement(View, {
+    ...injected, node: { data: { status: 'settled', blocks, finalNode }, location: { kind: 'turn', turn } },
+    useTurnData: () => ({ closing: { finalNode: { seq: tailSeq } } }), openFile,
+    fileMentions: ownerResolver,
+  }));
+  await React.act(() => renderClosing(42));
+  assert.equal(markdown.at(-1).fileMentions, mentions, 'Current host closing file links reach native Markdown');
+  assert.equal(fileOwners.at(-1).sessionId, 'qa-session');
+  assert.equal(fileOwners.at(-1).owner.turn, turn);
+  assert.equal(fileOwners.at(-1).owner.seq, 42);
+  assert.equal(fileOwners.at(-1).owner.openFile, openFile);
+  await React.act(() => renderClosing(41));
+  assert.equal(markdown.at(-1).fileMentions, undefined, 'Nonclosing messages do not acquire file links');
+  const legacyMentions = { resolve: () => 'legacy' };
+  await React.act(() => renderClosing(42, () => legacyMentions));
+  assert.equal(markdown.at(-1).fileMentions, legacyMentions, 'Retained hosts keep their owner resolver');
+  fileServiceAvailable = false;
+  await React.act(() => renderClosing(42));
+  assert.equal(markdown.at(-1).fileMentions, undefined, 'An unavailable optional file service leaves Markdown readable');
+  fileServiceAvailable = true;
+  const getTriggerProps = target => ({ onContextMenu: () => target() });
+  const useContextMenu = () => ({ getTriggerProps });
+  const renderInteractive = (status, messageId, menuHook = useContextMenu) => root.render(React.createElement(View, {
+    ...injected, sessionId: 'qa-session', useContextMenu: menuHook,
+    node: { data: { status, blocks, finalNode: { seq: 42, messageId } }, location: { kind: 'turn', turn } },
+    useTurnData: () => ({ closing: { finalNode: { seq: 42 } } }), openFile,
+  }));
+  await React.act(() => renderInteractive('settled', 'message-42'));
+  assert.equal(markdown.at(-1).textInteractionSource, true, 'Settled durable reply supports native Quote');
+  await React.act(() => dom.window.document.querySelector('.dss-dr-row').click());
+  assert.ok(dom.window.document.querySelector('.dss-nr-body[data-text-interaction-source]'), 'Expanded settled reasoning supports native Quote');
+  const trigger = fileOwners.at(-1).getFileTriggerProps('./report.txt');
+  liveCwd = 'C:\\workspace\\changed';
+  const target = trigger.onContextMenu();
+  assert.equal(target.kind, 'file');
+  assert.equal(target.value.sessionId, 'qa-session');
+  assert.equal(target.value.path, 'C:\\workspace\\changed\\report.txt', 'Resolve current session directory when the gesture fires');
+  for (const path of ['C:\\elsewhere\\report.txt', '/tmp/report.txt', '\\\\server\\share\\report.txt']) {
+    assert.equal(fileOwners.at(-1).getFileTriggerProps(path).onContextMenu().value.path, path);
+  }
+  liveCwd = undefined;
+  assert.equal(trigger.onContextMenu().value.path, 'C:\\workspace\\report.txt', 'Workspace fallback');
+  liveCwd = '/work/current';
+  assert.equal(trigger.onContextMenu().value.path, '/work/current/report.txt', 'POSIX directory');
+  sessionsAvailable = false;
+  assert.equal(trigger.onContextMenu().value.path, './report.txt', 'Optional session service may be unavailable');
+  for (const [status, messageId] of [['running', 'message-42'], ['interrupted', 'message-42'], ['settled', undefined]]) {
+    await React.act(() => renderInteractive(status, messageId));
+    assert.equal(markdown.at(-1).textInteractionSource, false, `${status}/${messageId}: native Quote eligibility`);
+    assert.equal(dom.window.document.querySelector('.dss-nr-body[data-text-interaction-source]'), null);
+  }
+  await React.act(() => renderInteractive('settled', 'message-42', null));
+  assert.equal(fileOwners.at(-1).getFileTriggerProps, undefined, 'Older hosts without context menus retain ordinary links');
 });
