@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-smooth-stream",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "DeepSeek Harness plugin: paragraph-batched streaming reveals with 8 designed animations, smooth scroll-follow and a settings panel.",
   "type": "module",
   "main": "lib/index.js",
