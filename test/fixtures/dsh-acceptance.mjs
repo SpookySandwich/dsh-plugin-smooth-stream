@@ -37,7 +37,11 @@ class LocalReply extends LlmAdapter {
         await delay(350);
       }
     }
-    yield { type: 'reasoning-delta', index: 0, text: 'SMOOTH_QA_THOUGHT: one local reasoning block.\n' };
+    const thought = process.env.DSH_QA_THOUGHT || 'SMOOTH_QA_THOUGHT: one local reasoning block.\n';
+    const firstLineEnd = thought.indexOf('\n');
+    yield { type: 'reasoning-delta', index: 0, text: thought.slice(0, firstLineEnd) };
+    await delay(1200); // Keep the first line unfinished long enough to inspect the summary.
+    yield { type: 'reasoning-delta', index: 0, text: thought.slice(firstLineEnd) };
     await delay(1200);
     if (signatures) {
       yield { type: 'reasoning-delta', index: 1, text: '<signature>metadata.only</signature>\n\n' };

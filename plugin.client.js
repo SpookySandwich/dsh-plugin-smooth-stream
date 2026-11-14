@@ -383,7 +383,10 @@ const CSS = [
   // left. A mask fades the clipped glyphs out over any background; settled rows
   // read from the start and want no mask at all.
   '.dss-nr-summary[data-follow-end]{text-overflow:clip;-webkit-mask-image:linear-gradient(to right,transparent 0,#000 24px);mask-image:linear-gradient(to right,transparent 0,#000 24px)}',
-  '.dss-nr-body{padding:4px 0 4px 22px;color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:24px;white-space:pre-wrap;word-break:break-word}',
+  '.dss-nr-body{padding:4px 0 4px 22px;min-width:0}',
+  // Only the local plain-text fallback needs these styles. Child providers
+  // own their typography and Markdown whitespace handling.
+  '.dss-nr-body>.dss-line{color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:24px;word-break:break-word}',
   '.dss-nr-hidden{clip:rect(0 0 0 0);white-space:nowrap;width:1px;height:1px;position:absolute;overflow:hidden}',
   '.dss-sum-fade{display:inline;animation:dss-fade var(--dss-fade-ms,520ms) ease-out both}',
   '.dss-line{display:block}',
@@ -703,6 +706,13 @@ return {
       return React.createElement('div', { ref: wrapRef, className: cls, 'data-dss-prose': '1' }, node);
     }
 
+    function renderChildSlot(renderSlot, name, owner, fallback) {
+      // A missing declaration renders nothing, including on older hosts that
+      // predate these slots. The outlet fallback covers declared but empty slots.
+      if (typeof renderSlot !== 'function' || (typeof slots.spec === 'function' && !slots.spec(name))) return fallback;
+      return renderSlot(name, owner, { fallback: fallback });
+    }
+
     function ReasoningView(props) {
       const [expanded, setExpanded] = React.useState(false);
       const summaryRef = React.useRef(null);
@@ -734,8 +744,9 @@ return {
 
       const stable = props.bodyStable || '';
       const fresh = props.bodyFresh || '';
-      const body = React.createElement('div', { className: 'dss-nr-body',
-        'data-text-interaction-source': props.textInteractionSource && !props.running ? '' : undefined },
+      // Older hosts have no reasoning body provider. Keep their paced body as
+      // the outlet fallback; current hosts own the full, unbatched display text.
+      const fallback = React.createElement(React.Fragment, null,
         stable ? React.createElement('div', { className: 'dss-line', style: { whiteSpace: 'pre-wrap' } }, stable) : null,
         fresh ? React.createElement('div', {
           key: 'f' + (props.batchId || 0),
@@ -743,6 +754,12 @@ return {
           style: { whiteSpace: 'pre-wrap' }
         }, fresh) : null
       );
+      const body = expanded ? React.createElement('div', { className: 'dss-nr-body',
+        'data-text-interaction-source': props.textInteractionSource && !props.running ? '' : undefined },
+        renderChildSlot(props.renderSlot, 'conversation.chat.reasoning.body', {
+          rawText: props.rawText, text: props.text, running: props.running
+        }, fallback)
+      ) : null;
       const summaryNode = React.createElement(React.Fragment, null,
         React.createElement('span', { className: 'dss-nr-separator', 'aria-hidden': true }),
         React.createElement('span', {
@@ -787,7 +804,7 @@ return {
         },
           React.createElement('span', { className: 'dss-dr-leading' }, leading),
           React.createElement('span', { className: 'dss-dr-title' }, props.title || 'Think'),
-          expanded ? null : summaryNode
+          expanded || !summary ? null : summaryNode
         ),
         expanded ? body : null
       );
@@ -808,6 +825,15 @@ return {
       return React.createElement('img', { className: 'dss-image', src: src, alt: '' });
     }
 
+    function MessageImagesFallback(props) {
+      if (typeof props.renderMessageImages === 'function') {
+        return props.renderMessageImages({ images: props.images, align: 'start' });
+      }
+      return React.createElement(React.Fragment, null, props.images.map(function (image, i) {
+        return React.createElement(ImageNode, { key: i, attachment: image.attachment, loadImage: props.loadImage });
+      }));
+    }
+
     function OtherView(props) {
       if (prims && isComponent(prims.JsonBlock)) {
         return React.createElement(prims.JsonBlock, { label: 'Data', payload: props.payload });
@@ -820,7 +846,8 @@ return {
       const data = (node && node.data) || {};
       // Prepare before measuring, polling or slicing so all reveal offsets use
       // display text. Preserve indexes and the host's original blocks.
-      const blocks = (Array.isArray(data.blocks) ? data.blocks : []).map(function (b) {
+      const rawBlocks = Array.isArray(data.blocks) ? data.blocks : [];
+      const blocks = rawBlocks.map(function (b) {
         return b && b.kind === 'reasoning' && typeof b.text === 'string'
           ? Object.assign({}, b, { text: reasoningText(b.text) }) : b;
       });
@@ -986,10 +1013,13 @@ return {
           const sumShown = Math.min(stateRef.current.sum[i] || 0, b.text.length);
           const batchId = stateRef.current.batch[i] || 0;
           const summaryBatch = stateRef.current.sumBatch[i] || 0;
-          if (bodyShown === 0 && sumShown === 0) continue;
+          if (bodyShown === 0 && sumShown === 0 && (typeof props.renderSlot !== 'function' || b.text.trim() === '')) continue;
           const prevShown = Math.min(stateRef.current.prev[i] || 0, bodyShown);
           rendered.push(React.createElement(ReasoningView, {
             key: 'r' + i,
+            rawText: rawBlocks[i].text,
+            text: b.text,
+            renderSlot: props.renderSlot,
             title: t('message.think'),
             runningLabel: t('row.running'),
             summaryText: b.text.slice(0, sumShown),
@@ -1003,25 +1033,23 @@ return {
             settleEligible: i === lastReasoningIdx
           }));
         } else if (b.kind === 'image') {
-          if (typeof props.renderMessageImages === 'function') {
-            const group = [b];
-            while (i + 1 < blocks.length && blocks[i + 1] && blocks[i + 1].kind === 'image') {
-              i += 1;
-              group.push(blocks[i]);
-            }
-            rendered.push(React.createElement(React.Fragment, { key: 'img' + i },
-              props.renderMessageImages({
-                images: group.map(function (image) { return { attachment: image.attachment }; }),
-                align: 'start'
-              })
-            ));
-          } else {
-            rendered.push(React.createElement(ImageNode, {
-              key: 'img' + i,
-              attachment: b.attachment,
-              loadImage: props.loadImage
-            }));
+          // Keep the first index as the key so appending to a gallery does not
+          // remount it and discard the viewer's state.
+          const start = i;
+          const group = [b];
+          while (i + 1 < blocks.length && blocks[i + 1] && blocks[i + 1].kind === 'image') {
+            i += 1;
+            group.push(blocks[i]);
           }
+          const images = group.map(function (image) { return { attachment: image.attachment }; });
+          const fallback = React.createElement(MessageImagesFallback, {
+            images: images, loadImage: props.loadImage, renderMessageImages: props.renderMessageImages
+          });
+          rendered.push(React.createElement(React.Fragment, { key: 'img' + start },
+            renderChildSlot(props.renderSlot, 'conversation.chat.message.images', {
+              images: images, loadImage: props.loadImage, align: 'start'
+            }, fallback)
+          ));
         } else if (b.kind === 'other') {
           rendered.push(React.createElement(OtherView, { key: 'o' + i, payload: b.block }));
         }
@@ -1253,8 +1281,26 @@ return {
         const on = settingsStore.get().enabled;
         if (on && current === null) {
           try {
-            current = slots.register(
+            let active = true;
+            function RegisteredAssistantNode(props) {
+              const renderSlot = React.useMemo(function () {
+                if (typeof props.renderSlot !== 'function') return undefined;
+                // Settings subscribers can render after disposal but before the
+                // host unmounts this entry. Never invoke a retired slot binding.
+                return function (name, owner, options) { return active ? props.renderSlot(name, owner, options) : null; };
+              }, [props.renderSlot]);
+              return React.createElement(GuardedAssistantNode, Object.assign({}, props, { renderSlot: renderSlot }));
+            }
+            const dispose = slots.register(
               { name: 'conversation.chat.node', key: 'assistant-step', priority: -1, locale: 'chat',
+                // DSH permits only one declaring entry per child slot, even
+                // when another entry shadows the same assistant key. Inherited
+                // specs authorize outlets without claiming/releasing the host's
+                // declarations (the registry enumerates only own child keys).
+                children: Object.create({
+                  'conversation.chat.reasoning.body': { kind: 'single', scope: 'session' },
+                  'conversation.chat.message.images': { kind: 'single', scope: 'session' }
+                }),
                 // DSH 0.2.2 moved this resolver from owner props to each assistant
                 // entry's injection. Keep the older owner resolver when supplied.
                 inject: function (sessionId) {
@@ -1274,8 +1320,9 @@ return {
                   } };
                 }
               },
-              GuardedAssistantNode
+              RegisteredAssistantNode
             );
+            current = function () { active = false; dispose(); };
           } catch (e) {
             console.warn('[dsh-plugin-smooth-stream] Unable to register assistant rendering.', e);
             current = null;

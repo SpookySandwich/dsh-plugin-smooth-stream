@@ -78,6 +78,7 @@ This release targets DSH `0.2.2-rc.1`. Run `npm ci`, `npm test`, and `npm run ch
 
 
 - Uses the host client services, Markdown and image APIs; automated tests cover loading and component rendering.
+- Expanded reasoning and image groups use the host's child slots, preserving reasoning translation controls and the native image gallery. The body provider controls expanded reasoning rendering, so Smooth Stream's batched fade-in applies only to its fallback on older hosts. The reasoning row is available before the first summary line finishes; it shows only the title and icon until summary text is available. Summary scrolling, fade-in and the closing underline are retained.
 - This plugin owns the conversation view's assistant rendering (the `assistant-step` cell of `conversation.chat.node`) and is mutually exclusive with other plugins that take over the same rendering — with both installed, only one wins.
 - Respects `prefers-reduced-motion`: with reduced motion enabled, all animation and smooth scrolling switch off.
 - A rendering failure degrades to plain text for that message instead of breaking the conversation.

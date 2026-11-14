@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 // Exercise real pointer selections and host-owned actions. No injected DOM
 // attributes or replacement menu/Quote implementations are used here.
-export async function checkInteractions(page, artifacts, label) {
+export async function checkInteractions(page, artifacts, label, reasoningText = 'SMOOTH_QA_THOUGHT: one local reasoning block.') {
   for (const button of await page.getByRole('button', { name: /^(Completed|已完成，用时)/ }).all()) {
     if (await button.getAttribute('aria-expanded') === 'false') await button.click();
   }
@@ -17,12 +17,15 @@ export async function checkInteractions(page, artifacts, label) {
     await page.waitForFunction(() => [...document.querySelectorAll('img[alt="SMOOTH_QA_PATH_IMAGE"]')].some(img => img.complete && img.naturalWidth === 160));
     results.pathImage = true;
   }
-  for (const [kind, text] of [['reasoning', 'SMOOTH_QA_THOUGHT: one local reasoning block.'], ['reply', 'SMOOTH_QA_ANSWER']]) {
+  for (const [kind, text] of [['reasoning', reasoningText], ['reply', 'SMOOTH_QA_ANSWER']]) {
     const seat = kind === 'reasoning'
       ? page.locator('.dss-nr-body, [data-slot="conversation.chat.reasoning.body"]')
       : page.locator('[data-chat-group-part="response"]');
-    const source = seat.getByText(text, { exact: true }).last();
+    const source = seat.getByText(text, { exact: kind !== 'reasoning' }).last();
     await source.scrollIntoViewIfNeeded();
+    // A multiline body can scroll under the sticky header during disclosure
+    // expansion. Center the text without smooth scrolling before measuring it.
+    await source.evaluate(el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
     await source.click({ trial: true });
     const box = await source.evaluate(el => {
       const range = document.createRange();
