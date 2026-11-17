@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-smooth-stream)](https://www.npmjs.com/package/dsh-plugin-smooth-stream)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.3-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.4-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![deepseek1024](https://img.shields.io/badge/deepseek1024-%E5%B7%B2%E6%94%B6%E5%BD%95-4b8dff)](https://deepseek1024.com/plugins/SpookySandwich/dsh-smooth-stream)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-smooth-stream?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/stargazers)
 
@@ -60,6 +60,8 @@ dsh plugin --profile web add dsh-plugin-smooth-stream
 
 ## 兼容性
 
+待发布：显式支持官方 dsh `0.2.2-rc.4`，保留已有兼容范围，渲染代码无需变更。已在 rc.4 Web 宿主上通过本地模拟服务、使用宿主的 DeepSeek 适配器验证流式输出后的拒绝：部分正文与思考会被清除，轮询、动画与滚动跟随停止；重载、重新连接与重启后均不会重新显示被拒绝的内容，后续回复仍正常流式呈现。
+
 版本 `1.6.2`：适配官方 dsh `0.2.2-rc.3`（同时保留 `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5` 与 `0.2.2-rc.1` 兼容）。验证导入会话历史（含思考过程、网页结果、图片、缺失字节的附件卡片与错误中断回合）在首次打开与继续对话时的渲染与滚动跟随表现。
 
 版本 `1.6.1`：恢复 Smooth Stream 接管助手消息节点时的 `conversation.chat.reasoning.body` 与 `conversation.chat.message.images` 宿主子插槽，恢复思考过程翻译工具栏与原生图片画廊；首行摘要完成前即可展开思考。
@@ -74,11 +76,11 @@ dsh plugin --profile web add dsh-plugin-smooth-stream
 
 版本 `1.2.0`：更新客户端渲染服务依赖与已验证的 DSH 版本范围；现有渲染行为通过新版宿主验证。
 
-声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1` 与 `0.2.2-rc.3` 满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)。
+声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1`、`0.2.2-rc.3` 与 `0.2.2-rc.4` 满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)。
 
-可从 [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/releases/tag/v1.6.2) 下载发布包，然后执行 `dsh plugin --profile desktop add ./dsh-plugin-smooth-stream-1.6.2.tgz`。
+可从 [GitHub 最新 Release](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/releases/latest) 下载 `.tgz` 发布包，然后执行 `dsh plugin --profile desktop add <下载的发布包路径.tgz>`（将占位符替换为实际路径）。
 
-本次兼容目标为 DSH `0.2.2-rc.3`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
+当前兼容目标为 DSH `0.2.2-rc.4`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
 
 
 - 使用宿主的客户端服务、Markdown 和图片接口；自动化测试覆盖加载与组件渲染。

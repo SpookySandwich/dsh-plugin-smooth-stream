@@ -11,11 +11,11 @@ test('npm peers accept the verified official prereleases without accepting futur
   assert.equal(pkg.engines.dsh, range);
   // npm excludes prereleases by default; the host's includePrerelease check alone
   // cannot prove that installing this plugin beside the official host succeeds.
-  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.3']) {
+  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.3', '0.2.2-rc.4']) {
     assert.ok(semver.satisfies(version, range), `npm must accept ${version}`);
     assert.ok(semver.satisfies(version, pkg.engines.dsh, { includePrerelease: true }));
   }
-  for (const version of ['0.1.5-rc.2', '0.2.0-rc.1', '0.2.2-alpha.2', '0.2.2-alpha.3', '0.2.2-rc.2', '0.2.2-rc.4', '0.2.3-alpha.1', '0.3.0-rc.1', '0.3.0']) {
+  for (const version of ['0.1.5-rc.2', '0.2.0-rc.1', '0.2.2-alpha.2', '0.2.2-alpha.3', '0.2.2-rc.2', '0.2.2-rc.5', '0.2.3-alpha.1', '0.3.0-rc.1', '0.3.0']) {
     assert.equal(semver.satisfies(version, range), false, `npm must exclude ${version}`);
   }
   assert.deepEqual(lock.packages[''].peerDependencies, pkg.peerDependencies);

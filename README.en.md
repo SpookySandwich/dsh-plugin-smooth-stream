@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-smooth-stream)](https://www.npmjs.com/package/dsh-plugin-smooth-stream)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.3-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.4-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![deepseek1024](https://img.shields.io/badge/deepseek1024-listed-4b8dff)](https://deepseek1024.com/plugins/SpookySandwich/dsh-smooth-stream)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-smooth-stream?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/stargazers)
 
@@ -60,6 +60,8 @@ Eight entrances, each tuned to its own rhythm; all recorded over the same reply 
 
 ## Compatibility
 
+Unreleased: Explicitly admit official dsh `0.2.2-rc.4`, retaining the existing compatibility range without renderer changes. Verified refusals after partial streaming on the rc.4 web host through its DeepSeek adapter with a local provider fixture: partial text and reasoning disappear, polling, animations, and scroll-follow stop, refused content stays absent after reload, reconnect, and restart, and the next reply streams normally.
+
 Version `1.6.2`: Support official dsh `0.2.2-rc.3` (while retaining `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, and `0.2.2-rc.1` compatibility). Verified imported chat history rendering (including reasoning blocks, web results, stored images, unavailable file cards, and error-ended turns) on first open, across restarts, and during continued streaming sessions.
 
 Version `1.6.1`: Restore the host `conversation.chat.reasoning.body` and `conversation.chat.message.images` child slots when Smooth Stream replaces the assistant node renderer, preserving reasoning translation controls and the native image gallery; allow expanding reasoning before the first summary line finishes.
@@ -74,11 +76,11 @@ Version `1.3.0`: Load on official dsh `0.2.0-rc.2`. Rendering still registers on
 
 Version `1.2.0`: Declare the current UI renderer service provider and the verified DSH release range. Existing rendering behavior passes the current host checks.
 
-The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, `0.2.2-rc.1`, and `0.2.2-rc.3` satisfy it. Keep the previous plugin release on older DSH. [Validation record](.github/reviews/dsh-0.2.2-rc.1.md).
+The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, `0.2.2-rc.1`, `0.2.2-rc.3`, and `0.2.2-rc.4` satisfy it. Keep the previous plugin release on older DSH. [Validation record](.github/reviews/dsh-0.2.2-rc.1.md).
 
-Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/releases/tag/v1.6.2), then run `dsh plugin --profile desktop add ./dsh-plugin-smooth-stream-1.6.2.tgz`.
+Download the `.tgz` archive from the [latest GitHub Release](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/releases/latest), then run `dsh plugin --profile desktop add <path-to-downloaded-archive.tgz>` with the actual archive path.
 
-This release targets DSH `0.2.2-rc.3`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
+The current compatibility target is DSH `0.2.2-rc.4`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
 
 
 - Uses the host client services, Markdown and image APIs; automated tests cover loading and component rendering.
