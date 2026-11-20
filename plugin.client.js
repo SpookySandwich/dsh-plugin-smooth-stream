@@ -160,6 +160,19 @@ function latestLine(text) {
   const n = t.lastIndexOf('\n');
   return n === -1 ? t : t.slice(n + 1);
 }
+function stripSummaryMarkdown(line) {
+  return String(line || '')
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, '')
+    .replace(/\[([^\]]+)\]\([^)\s]+(?:\s+"[^"]*")?\)/g, '$1')
+    .replace(/``([^`]+)``/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/(^|[\s(])\*([^*\n]+?)\*(?=[\s.,;:!?)]|$)/g, '$1$2')
+    .replace(/(^|[\s(])_([^_\n]+?)_(?=[\s.,;:!?)]|$)/g, '$1$2')
+    .replaceAll('**', '');
+}
 function realGlobal() {
   try { if (typeof window !== 'undefined' && window) return window; } catch (e) {}
   try { if (typeof globalThis !== 'undefined' && globalThis) return globalThis; } catch (e) {}
@@ -717,7 +730,7 @@ return {
       const [expanded, setExpanded] = React.useState(false);
       const summaryRef = React.useRef(null);
       const summarySrc = props.summaryText !== undefined ? props.summaryText : props.text;
-      const summary = props.running ? latestLine(summarySrc) : firstLine(summarySrc);
+      const summary = stripSummaryMarkdown(props.running ? latestLine(summarySrc) : firstLine(summarySrc));
       React.useEffect(function () {
         const el = summaryRef.current;
         if (!el) return;
@@ -787,7 +800,8 @@ return {
         'data-variant': 'think',
         'data-state': props.running ? 'running' : 'ok',
         'data-settling': settling ? '' : undefined,
-        'data-open': expanded || undefined
+        'data-open': expanded || undefined,
+        'data-expanded': expanded || undefined
       },
         props.running ? React.createElement('span', { className: 'dss-nr-hidden' }, props.runningLabel || 'Running') : null,
         React.createElement('div', {
