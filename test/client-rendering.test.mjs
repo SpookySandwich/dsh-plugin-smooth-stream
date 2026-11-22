@@ -30,8 +30,10 @@ test('native Markdown receives labels, streaming and file links; optional host i
   let fileServiceAvailable = true;
   let sessionsAvailable = true;
   let liveCwd = 'C:\\workspace\\initial';
+  const record = { cwd: 'C:\\workspace' };
+  const list = { byId: { 'qa-session': record } };
   const sessions = {
-    list: { getSnapshot: () => ({ byId: { 'qa-session': { cwd: 'C:\\workspace' } } }) },
+    list: { getSnapshot: () => list },
     binding: () => ({ session: { projections: { faceOf: () => ({ getSnapshot: () => liveCwd }) } } }),
   };
   const warnings = [];
@@ -142,7 +144,14 @@ test('native Markdown receives labels, streaming and file links; optional host i
   for (const path of ['C:\\elsewhere\\report.txt', '/tmp/report.txt', '\\\\server\\share\\report.txt']) {
     assert.equal(fileOwners.at(-1).getFileTriggerProps(path).onContextMenu().value.path, path);
   }
+  record.projectionValues = { workingDirectory: '/listed/worktree' };
+  list.projectionsBySession = { 'qa-session': { values: { workingDirectory: '/projected/worktree' } } };
+  assert.equal(trigger.onContextMenu().value.path, 'C:\\workspace\\changed\\report.txt');
   liveCwd = undefined;
+  assert.equal(trigger.onContextMenu().value.path, '/projected/worktree/report.txt');
+  delete list.projectionsBySession;
+  assert.equal(trigger.onContextMenu().value.path, '/listed/worktree/report.txt');
+  delete record.projectionValues;
   assert.equal(trigger.onContextMenu().value.path, 'C:\\workspace\\report.txt', 'Workspace fallback');
   liveCwd = '/work/current';
   assert.equal(trigger.onContextMenu().value.path, '/work/current/report.txt', 'POSIX directory');

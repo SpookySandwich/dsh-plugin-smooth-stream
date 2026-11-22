@@ -17,6 +17,20 @@ class LocalReply extends LlmAdapter {
   }
   async listModels(provider) { return [await this.resolveModel(provider, 'qa-model')]; }
   async *stream(options) {
+    if (scenario === 'short') {
+      yield { type: 'text-delta', index: 0, text: 'SMOOTH_QA_FOLLOW_READY' };
+      yield { type: 'finish', reason: { kind: 'stop' } };
+      return;
+    }
+    if (scenario === 'long') {
+      for (let i = 1; i <= 30; i++) {
+        yield { type: 'text-delta', index: 0, text: `SMOOTH_QA_LONG_${i}: ` + 'Scroll follow keeps the newest batch in view. '.repeat(8) + '\n\n' };
+        await delay(80);
+      }
+      yield { type: 'text-delta', index: 0, text: 'SMOOTH_QA_LONG_DONE' };
+      yield { type: 'finish', reason: { kind: 'stop' } };
+      return;
+    }
     if (scenario !== 'normal') {
       yield { type: 'reasoning-delta', index: 0, text: `SMOOTH_QA_${scenario}_THOUGHT\n` };
       yield { type: 'text-delta', index: 1, text: `# SMOOTH_QA_${scenario}_PARTIAL\n\n` + 'Partial streaming output. '.repeat(30) + '\n\n' };
@@ -94,11 +108,38 @@ export async function apply(ctx) {
     }
     await ctx.sessions.flush(handle.agent.session);
   };
+  let workspace;
   if (!exists) {
     ctx.sessionTitle.rename(handle.agent.session, 'Smooth Stream acceptance');
-    const workspace = await ctx.workspaceRegistry.create(cwd, 'Smooth Stream QA');
+    workspace = await ctx.workspaceRegistry.create(cwd, 'Smooth Stream QA');
     await workspace.attachSession(id);
     await reply();
+  }
+  if (process.env.DSH_QA_FOLLOW === '1') {
+    const followId = 'session-smooth-follow';
+    const known = (await ctx.sessionQuery.listSessions()).some(record => record.header.id === followId);
+    const follow = known
+      ? await ctx.agents.resume({ resumeSessionId: followId, agentOptions: { provider: 'qa-local', model: 'qa-model' } })
+      : await ctx.agents.create({ sessionId: followId, meta: { cwd }, agentOptions: { provider: 'qa-local', model: 'qa-model' } });
+    ctx.effect(() => () => follow.dispose());
+    const run = async (kind, text) => {
+      scenario = kind;
+      try {
+        follow.agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text }] }));
+        await follow.agent.whenIdle();
+      } finally { scenario = 'normal'; }
+      await ctx.sessions.flush(follow.agent.session);
+    };
+    if (!known) {
+      ctx.sessionTitle.rename(follow.agent.session, 'Smooth Stream follow');
+      await workspace.attachSession(followId);
+      await run('short', 'Short opening turn');
+    }
+    ctx.webServer.register({ kind: 'exact', path: '/qa/long', handler: async (_req, res) => {
+      await run('long', 'Long streamed reply');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{}');
+    } });
   }
   ctx.webServer.register({ kind: 'exact', path: '/qa/followup', handler: async (_req, res) => {
     await reply();

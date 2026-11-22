@@ -202,7 +202,7 @@ try {
       // Observe actual live chat, including short-lived prefix states and reveal
       // nodes. The settings preview is deliberately excluded from this sample.
       await page.evaluate(checkWholePage => {
-        const stats = window.__smoothQA = { leaks: [], fresh: 0, motionErrors: [], scroll: 0, emptySummaries: 0, summaryErrors: [] };
+        const stats = window.__smoothQA = { leaks: [], fresh: 0, motionErrors: [], emptySummaries: 0, summaryErrors: [] };
         const sample = () => {
           // Older official hosts still expose raw reasoning in their own live
           // process preview. Assert the whole page on rc.5 and plugin-owned
@@ -223,19 +223,11 @@ try {
               if (summary || row.querySelector('.dss-nr-separator')) stats.summaryErrors.push('empty summary or dangling separator');
             }
           }
-          for (const el of document.querySelectorAll('[data-conversation-scroll].dss-smooth-follow')) {
-            stats.scroll++;
-            if (getComputedStyle(el).scrollBehavior !== 'auto') stats.motionErrors.push('live follow still smooth');
-          }
+          if (document.querySelector('[data-dss-gliding]')) stats.motionErrors.push('live follow still glides');
         };
         window.__smoothQATimer = setInterval(sample, 25);
       }, !['0.2.0-rc.2', '0.2.1-rc.2'].includes(version));
       const response = page.request.get(`${origin}/qa/followup`);
-      if (process.env.DSH_QA_SETTINGS) {
-        const scrollport = page.locator('[data-conversation-scroll].dss-smooth-follow');
-        await scrollport.waitFor();
-        assert.equal(await scrollport.evaluate(el => getComputedStyle(el).scrollBehavior), 'auto', 'Reduced motion disables smooth follow');
-      }
       await page.waitForFunction(count => document.querySelectorAll('.dss-body .dss-dr-row').length === count, initialCount + 1);
       assert.equal((await response).status(), 200);
       await page.waitForFunction(count => [...document.querySelectorAll('.dss-body')].filter(el => el.textContent.includes('SMOOTH_QA_DONE')).length === count, initialCount + 1);
@@ -243,7 +235,7 @@ try {
       assert.equal(await page.locator('[data-chat-group-part="reasoning"] [data-dss-prose]').count(), 0);
       assert.equal(await page.locator('[data-chat-group-part="response"] .dss-dr-row').count(), 0);
       const live = await page.evaluate(() => { clearInterval(window.__smoothQATimer); return window.__smoothQA; });
-      assert.ok(live.fresh > 0 && live.scroll > 0, 'Sample actual live reveal and scroll-follow states');
+      assert.ok(live.fresh > 0, 'Sample actual live reveal states');
       assert.deepEqual(live.motionErrors, []);
       assert.deepEqual(live.summaryErrors, []);
       if (nativeChildSlots) assert.ok(live.emptySummaries > 0, 'Observe the early reasoning row before its first newline');
@@ -260,9 +252,77 @@ try {
         for (const body of await page.locator('.dss-nr-body').all()) await checkBody(body);
         console.log(`${version} ${phase}: signature prefixes/envelopes hidden, signature-only row omitted, prepared history/live body passed`);
       }
-      console.log(`${version} ${phase}: live reduced-motion samples: ${live.fresh} reveal nodes, ${live.scroll} scroll states passed`);
+      console.log(`${version} ${phase}: live reduced-motion samples: ${live.fresh} reveal nodes without animation or glide passed`);
       assert.deepEqual(errors, []);
       console.log(`${version} ${phase}: offline live stream completed without duplicate blocks or browser errors`);
+      if (process.env.DSH_QA_FOLLOW === '1' && phase === 'fresh') {
+        await page.getByText('Smooth Stream follow', { exact: true }).first().click();
+        await page.getByText('SMOOTH_QA_FOLLOW_READY', { exact: true }).waitFor();
+        const scroller = page.locator('[data-conversation-scroll]');
+        const longStream = async (motion, scrollUp = false) => {
+          await page.emulateMedia({ reducedMotion: motion });
+          const before = await scroller.evaluate(el => ({ gap: el.scrollHeight - el.clientHeight - el.scrollTop, overflows: el.scrollHeight > el.clientHeight }));
+          await page.evaluate(() => {
+            const el = document.querySelector('[data-conversation-scroll]');
+            const stats = window.__follow = { maxGap: 0, glides: 0 };
+            const tick = () => {
+              stats.maxGap = Math.max(stats.maxGap, el.scrollHeight - el.clientHeight - el.scrollTop);
+              if (el.querySelector('[data-dss-gliding]')) stats.glides++;
+              stats.frame = requestAnimationFrame(tick);
+            };
+            stats.frame = requestAnimationFrame(tick);
+          });
+          const done = page.getByText('SMOOTH_QA_LONG_DONE', { exact: true });
+          const finished = await done.count();
+          const response = page.request.get(`${origin}/qa/long`);
+          let readerTop;
+          if (scrollUp) {
+            await page.getByText(/^SMOOTH_QA_LONG_10:/).last().waitFor();
+            const box = await scroller.boundingBox();
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+            await page.mouse.wheel(0, -600);
+            await page.waitForTimeout(500);
+            readerTop = await scroller.evaluate(el => el.scrollTop);
+          }
+          assert.equal((await response).status(), 200);
+          await page.waitForFunction(count => [...document.querySelectorAll('.dss-body')].filter(el => el.textContent.includes('SMOOTH_QA_LONG_DONE')).length > count, finished);
+          await page.waitForFunction(() => !document.querySelector('[data-dss-gliding]'));
+          await page.waitForTimeout(500);
+          const after = await page.evaluate(() => {
+            const el = document.querySelector('[data-conversation-scroll]');
+            cancelAnimationFrame(window.__follow.frame);
+            return { ...window.__follow, gap: el.scrollHeight - el.clientHeight - el.scrollTop, top: el.scrollTop, height: el.clientHeight,
+              heights: [...document.querySelectorAll('.dss-root')].filter(root => root.style.height).length };
+          });
+          assert.equal(after.heights, 0, 'Glides release their inline heights');
+          return { before, after, readerTop };
+        };
+        const fits = await longStream('no-preference');
+        assert.equal(fits.before.overflows, false, 'The first long stream starts with content that fits');
+        const bottom = await longStream('no-preference');
+        assert.ok(bottom.before.overflows && bottom.before.gap <= 2, `The second long stream starts at the bottom: ${JSON.stringify(bottom.before)}`);
+        if (process.env.DSH_QA_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_QA_ARTIFACTS, `follow-${version}.png`) });
+        for (const [label, run] of [['fits', fits], ['bottom', bottom]]) {
+          assert.ok(run.after.glides > 0, `${label}: smooth follow glides with motion allowed`);
+          assert.ok(run.after.gap <= 2 && run.after.maxGap < run.after.height / 2, `${label}: the reply stays at the bottom: ${JSON.stringify(run.after)}`);
+        }
+        const released = await longStream('no-preference', true);
+        assert.ok(Math.abs(released.after.top - released.readerTop) <= 2 && released.after.gap > released.after.height / 2,
+          `Scrolling up releases follow: ${JSON.stringify({ readerTop: released.readerTop, ...released.after })}`);
+        await scroller.evaluate(el => el.scrollTo({ top: el.scrollHeight, behavior: 'instant' }));
+        await page.waitForTimeout(500);
+        const reduced = await longStream('reduce');
+        assert.ok(reduced.before.gap <= 2 && reduced.after.glides === 0 && reduced.after.gap <= 2,
+          `Reduced motion follows without gliding: ${JSON.stringify(reduced)}`);
+        assert.deepEqual(errors, []);
+        console.log(`${version}: long-stream follow stays at the bottom with motion allowed (from fitting content and from the bottom) and with reduced motion; scrolling up releases it`);
+        await page.getByText('Smooth Stream acceptance', { exact: true }).first().click();
+        await page.locator('[data-chat-group-part="response"] .dss-body').getByText('SMOOTH_QA_ANSWER', { exact: true }).first().waitFor();
+        for (const button of await page.getByRole('button', { name: /^(Completed|已完成，用时)/ }).all()) {
+          if (await button.getAttribute('aria-expanded') === 'false') await button.click();
+        }
+        await expandReasoning();
+      }
       if (process.env.DSH_QA_SETTINGS && phase === 'fresh') {
         const openSettings = async () => {
           const direct = page.getByRole('button', { name: 'Settings', exact: true });
@@ -293,12 +353,17 @@ try {
             const el = document.querySelector('.dss-set-preview .dss-set-piece');
             return el?.isConnected && getComputedStyle(el).animationName === expected;
           }, `dss-${name.toLowerCase()}`);
+          if (name === 'Rise') await page.waitForFunction(() => document.querySelector('.dss-set-preview [data-dss-gliding]'));
           await page.emulateMedia({ reducedMotion: 'reduce' });
         }
         await page.getByRole('button', { name: 'Rise', exact: true }).click();
         await page.locator('.dss-set-preview .dss-set-piece').first().waitFor();
         assert.equal(await page.locator('.dss-set-preview').getAttribute('data-reveal'), 'rise');
-        assert.equal(await page.locator('.dss-set-preview').evaluate(el => getComputedStyle(el).scrollBehavior), 'auto');
+        assert.equal(await page.evaluate(() => new Promise(resolve => {
+          let glided = false;
+          const timer = setInterval(() => { glided ||= document.querySelector('.dss-set-preview [data-dss-gliding]') !== null; }, 25);
+          setTimeout(() => { clearInterval(timer); resolve(glided); }, 1000);
+        })), false, 'Reduced motion keeps the preview from gliding');
         assert.equal(await page.locator('.dss-set-piece').first().evaluate(el => getComputedStyle(el).animationName), 'none');
         if (process.env.DSH_QA_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_QA_ARTIFACTS, `settings-${version}.png`), fullPage: true });
         await page.getByRole('checkbox', { name: /Enable Smooth Stream/ }).uncheck();

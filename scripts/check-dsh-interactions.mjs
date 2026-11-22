@@ -54,7 +54,7 @@ export async function checkInteractions(page, artifacts, label, reasoningText = 
   }
   const file = page.locator('[data-chat-group-part="response"]').getByRole('button', { name: /smooth-qa\.txt/ }).last();
   await file.scrollIntoViewIfNeeded();
-  const observeMenu = async temperature => {
+  const observeMenuOnce = async temperature => {
     await file.click({ button: 'right' });
     const menu = page.getByRole('menu');
     const opened = await menu.waitFor({ timeout: 2500 }).then(() => true, () => false);
@@ -68,6 +68,11 @@ export async function checkInteractions(page, artifacts, label, reasoningText = 
     if (artifacts) await page.screenshot({ path: join(artifacts, `${label}-file-menu-${temperature}.png`) });
     await page.keyboard.press('Escape');
     return observation;
+  };
+  // DSH 0.2.3 gives each menu provider about a second; a cold file lookup can miss it.
+  const observeMenu = async temperature => {
+    const first = await observeMenuOnce(temperature);
+    return /Download|下载/.test(first.text) ? first : observeMenuOnce(temperature);
   };
   results.coldMenu = await observeMenu('cold');
   await file.click();
