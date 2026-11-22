@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-smooth-stream)](https://www.npmjs.com/package/dsh-plugin-smooth-stream)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.3--alpha.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.3--alpha.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![deepseek1024](https://img.shields.io/badge/deepseek1024-%E5%B7%B2%E6%94%B6%E5%BD%95-4b8dff)](https://deepseek1024.com/plugins/SpookySandwich/dsh-smooth-stream)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-smooth-stream?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/stargazers)
 
@@ -60,7 +60,9 @@ dsh plugin --profile web add dsh-plugin-smooth-stream
 
 ## 兼容性
 
-待发布：适配官方 dsh `0.2.3-alpha.1`（同时保留已有兼容范围）。修复 `1.6.4` 与 `1.6.5` 在默认设置下于 `0.2.2-rc.5` 和 `0.2.3-alpha.1` 上流式平滑滚动跟随会脱离底部的问题：不再修改宿主对话滚动容器的 `scroll-behavior`，改由 `useGrowthGlide` 在流式输出期间平滑展开每批新增内容的高度，使宿主原生跟随始终贴合底部；在 `resolveSmoothFilePath` 中对齐 `0.2.3-alpha.1` 的会话目录解析回退顺序（依次读取实时 `workingDirectory` 投影、会话列表投影与初始 `cwd`），确保切换工作树后文件点击与右键菜单指向正确路径。（注：npm 上已发布的 `@deepseek-ai/dsh@0.2.3-alpha.1` 因上游尚未重新发布配套的 `@deepseek-ai/cordis-plugin-loader` 与 `@deepseek-ai/cordis-plugin-include` 而无法直接启动，需待 DeepSeek 重新发布这两个依赖包或使用源码标签构建。）
+待发布：新增对官方 DSH `0.2.3-alpha.2` 的支持（该版本要求使用 Node.js `^24.22.3 || >=26.13.1`）。
+
+版本 `1.6.6`：适配官方 dsh `0.2.3-alpha.1`（同时保留已有兼容范围）。修复 `1.6.4` 与 `1.6.5` 在默认设置下于 `0.2.2-rc.5` 和 `0.2.3-alpha.1` 上流式平滑滚动跟随会脱离底部的问题：不再修改宿主对话滚动容器的 `scroll-behavior`，改由 `useGrowthGlide` 在流式输出期间平滑展开每批新增内容的高度，使宿主原生跟随始终贴合底部；在 `resolveSmoothFilePath` 中对齐 `0.2.3-alpha.1` 的会话目录解析回退顺序（依次读取实时 `workingDirectory` 投影、会话列表投影与初始 `cwd`），确保切换工作树后文件点击与右键菜单指向正确路径。（注：npm 上已发布的 `@deepseek-ai/dsh@0.2.3-alpha.1` 因上游尚未重新发布配套的 `@deepseek-ai/cordis-plugin-loader` 与 `@deepseek-ai/cordis-plugin-include` 而无法直接启动，需待 DeepSeek 重新发布这两个依赖包或使用源码标签构建。）
 
 版本 `1.6.4` / `1.6.5`：显式支持官方 dsh `0.2.2-rc.4` 与 `0.2.2-rc.5`，保留已有兼容范围。已在 rc.4 Web 宿主上通过本地模拟服务、使用宿主的 DeepSeek 适配器验证流式输出后的拒绝：部分正文与思考会被清除，轮询、动画与滚动跟随停止；重载、重新连接与重启后均不会重新显示被拒绝的内容，后续回复仍正常流式呈现。rc.5 仅调整宿主选择网页搜索服务的方式；已在 rc.5 Web 宿主上验证：流式回复与历史记录在思考与正文分席中各只显示一次，思考与图片子插槽、引用、文件链接与思考翻译在重启后仍正常工作；含 `web_search` 结果的回合由宿主保留搜索卡片，Smooth Stream 只渲染思考与正文。
 
@@ -78,11 +80,11 @@ dsh plugin --profile web add dsh-plugin-smooth-stream
 
 版本 `1.2.0`：更新客户端渲染服务依赖与已验证的 DSH 版本范围；现有渲染行为通过新版宿主验证。
 
-声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5 || 0.2.3-alpha.1`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1`、`0.2.2-rc.3`、`0.2.2-rc.4`、`0.2.2-rc.5` 与 `0.2.3-alpha.1` 满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)。
+声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5 || 0.2.3-alpha.1 || 0.2.3-alpha.2`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1`、`0.2.2-rc.3`、`0.2.2-rc.4`、`0.2.2-rc.5`、`0.2.3-alpha.1` 与 `0.2.3-alpha.2` 满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)。
 
 可从 [GitHub 最新 Release](https://github.com/SpookySandwich/dsh-plugin-smooth-stream/releases/latest) 下载 `.tgz` 发布包，然后执行 `dsh plugin --profile desktop add <下载的发布包路径.tgz>`（将占位符替换为实际路径）。
 
-当前兼容目标为 DSH `0.2.3-alpha.1`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
+当前兼容目标为 DSH `0.2.3-alpha.2`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
 
 
 - 使用宿主的客户端服务、Markdown 和图片接口；自动化测试覆盖加载与组件渲染。
